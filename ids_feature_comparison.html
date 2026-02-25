@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>IDS Feature Comparison: XPlane vs PX4</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+  :root {
+    --bg: #07090f;
+    --surface: #0e1118;
+    --border: #1e2433;
+    --x-color: #38bdf8;
+    --p-color: #f97316;
+    --x-dim: rgba(56,189,248,0.15);
+    --p-dim: rgba(249,115,22,0.15);
+    --good: #22c55e;
+    --warn: #eab308;
+    --bad: #ef4444;
+    --text: #e2e8f0;
+    --muted: #64748b;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+    padding: 32px;
+  }
+
+  /* HEADER */
+  .header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 32px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 24px;
+  }
+  .header-left h1 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 22px; font-weight: 600;
+    letter-spacing: -0.5px;
+    color: #f1f5f9;
+  }
+  .header-left .sub {
+    font-size: 13px; color: var(--muted); margin-top: 4px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .legend {
+    display: flex; gap: 20px; align-items: center;
+    font-size: 13px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-dot { width:10px; height:10px; border-radius:50%; }
+
+  /* VERDICT BANNER */
+  .verdict {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .verdict-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .verdict-card::before {
+    content: '';
+    position: absolute; top:0; left:0;
+    width: 3px; height: 100%;
+  }
+  .verdict-card.good::before { background: var(--good); }
+  .verdict-card.warn::before { background: var(--warn); }
+  .verdict-card.bad::before  { background: var(--bad); }
+
+  .verdict-card .feat-name {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); font-family: 'IBM Plex Mono', monospace;
+    margin-bottom: 8px;
+  }
+  .verdict-card .result {
+    font-size: 15px; font-weight: 600; margin-bottom: 6px;
+  }
+  .verdict-card.good .result { color: var(--good); }
+  .verdict-card.warn .result { color: var(--warn); }
+  .verdict-card.bad  .result { color: var(--bad); }
+  .verdict-card .detail { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .verdict-card .badge {
+    display: inline-block; font-size: 10px; font-family: 'IBM Plex Mono', monospace;
+    padding: 2px 7px; border-radius: 3px; margin-top: 6px;
+  }
+  .verdict-card.good .badge { background: rgba(34,197,94,0.15); color: var(--good); }
+  .verdict-card.warn .badge { background: rgba(234,179,8,0.15);  color: var(--warn); }
+  .verdict-card.bad  .badge { background: rgba(239,68,68,0.15);  color: var(--bad); }
+
+  /* GRID */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .card h3 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); font-family: 'IBM Plex Mono', monospace;
+    margin-bottom: 16px;
+  }
+  .chart-wrap { position: relative; height: 200px; }
+  .chart-wrap-tall { position: relative; height: 240px; }
+
+  /* STATS TABLE */
+  .stat-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .stat-table th {
+    text-align: left; padding: 6px 10px;
+    color: var(--muted); font-weight: 400;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    border-bottom: 1px solid var(--border);
+  }
+  .stat-table td {
+    padding: 7px 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    border-bottom: 1px solid rgba(30,36,51,0.5);
+  }
+  .stat-table tr:last-child td { border-bottom: none; }
+  .xval { color: var(--x-color); }
+  .pval { color: var(--p-color); }
+  .diff { color: var(--muted); }
+  .diff.big { color: var(--bad); }
+  .diff.ok  { color: var(--warn); }
+  .diff.fine { color: var(--good); }
+
+  /* FALSE ALARM BAR */
+  .fa-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+  .fa-label { font-size: 12px; font-family: 'IBM Plex Mono', monospace; width: 90px; color: var(--muted); }
+  .fa-bar-bg { flex: 1; background: var(--border); border-radius: 3px; height: 14px; position: relative; overflow: hidden; }
+  .fa-bar { height: 100%; border-radius: 3px; transition: width 1s ease; }
+  .fa-pct { font-size: 12px; font-family: 'IBM Plex Mono', monospace; width: 45px; text-align: right; }
+
+  /* CONCLUSION */
+  .conclusion {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-top: 4px;
+  }
+  .conclusion h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); font-family: 'IBM Plex Mono', monospace;
+    margin-bottom: 12px;
+  }
+  .conclusion p { font-size: 13px; line-height: 1.8; color: #cbd5e1; }
+  .conclusion strong { color: var(--text); }
+  .highlight-bad  { color: var(--bad); font-weight: 600; }
+  .highlight-good { color: var(--good); font-weight: 600; }
+  .highlight-warn { color: var(--warn); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>IDS Feature Comparison</h1>
+    <div class="sub">XPlane 111236 vs PX4 0222 · 안정 구간 (lon 126.86 ~ 127.00) · 순수 비행 구간</div>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#38bdf8"></div><span>X-Plane</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f97316"></div><span>PX4</span></div>
+  </div>
+</div>
+
+<!-- VERDICT CARDS -->
+<div class="verdict">
+  <div class="verdict-card bad">
+    <div class="feat-name">수평 속도 (Horizontal Speed)</div>
+    <div class="result">⚠ 차이 있음</div>
+    <div class="detail">
+      XPlane 67.2 m/s (242 km/h)<br>
+      PX4 70.5 m/s (254 km/h)<br>
+      평균 차이 <strong>3.3 m/s (11.8 km/h)</strong>
+    </div>
+    <div class="badge">Cohen's d = 0.686 (중-대)</div>
+    <div class="badge">오분류율 11.4%</div>
+  </div>
+  <div class="verdict-card warn">
+    <div class="feat-name">고도 (Altitude)</div>
+    <div class="result">△ 평균은 같으나 분산 다름</div>
+    <div class="detail">
+      XPlane 304.4 m · std <strong>1.6 m</strong><br>
+      PX4 304.1 m · std <strong>9.0 m</strong><br>
+      평균 차이 0.3 m, std 차이 7.4 m
+    </div>
+    <div class="badge">Cohen's d = 0.047 (소)</div>
+    <div class="badge">오분류율 52.3%</div>
+  </div>
+  <div class="verdict-card warn">
+    <div class="feat-name">수직 속도 (Climb Rate)</div>
+    <div class="result">△ 평균은 같으나 분산 다름</div>
+    <div class="detail">
+      XPlane std <strong>0.36 m/s</strong><br>
+      PX4 std <strong>1.66 m/s</strong><br>
+      PX4가 4.6배 더 변동 큼
+    </div>
+    <div class="badge">Cohen's d = 0.091 (소)</div>
+    <div class="badge">오분류율 36.6%</div>
+  </div>
+</div>
+
+<!-- 분포 히스토그램 -->
+<div class="grid-3">
+  <div class="card">
+    <h3>수평 속도 분포 (m/s)</h3>
+    <div class="chart-wrap"><canvas id="histSpeed"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>고도 분포 (m)</h3>
+    <div class="chart-wrap"><canvas id="histElev"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>수직 속도 분포 (m/s)</h3>
+    <div class="chart-wrap"><canvas id="histClimb"></canvas></div>
+  </div>
+</div>
+
+<!-- 통계 테이블 + False Alarm -->
+<div class="grid">
+  <div class="card">
+    <h3>수치 통계 비교 (안정 구간)</h3>
+    <table class="stat-table">
+      <tr>
+        <th>피처</th><th>구분</th><th>평균</th><th>std</th><th>5th</th><th>95th</th>
+      </tr>
+      <tr>
+        <td rowspan="3" style="color:#94a3b8;vertical-align:middle">수평속도<br><span style="color:#475569;font-size:10px">(m/s)</span></td>
+        <td class="xval">XPlane</td><td class="xval">67.21</td><td class="xval">2.15</td><td class="xval">63.32</td><td class="xval">71.09</td>
+      </tr>
+      <tr>
+        <td class="pval">PX4</td><td class="pval">70.50</td><td class="pval">2.80</td><td class="pval">65.91</td><td class="pval">75.24</td>
+      </tr>
+      <tr>
+        <td class="diff big">차이</td><td class="diff big">3.29</td><td class="diff ok">0.65</td><td class="diff ok">2.59</td><td class="diff big">4.15</td>
+      </tr>
+      <tr><td colspan="6" style="padding:4px"></td></tr>
+      <tr>
+        <td rowspan="3" style="color:#94a3b8;vertical-align:middle">고도<br><span style="color:#475569;font-size:10px">(m)</span></td>
+        <td class="xval">XPlane</td><td class="xval">304.30</td><td class="xval">1.09</td><td class="xval">301.77</td><td class="xval">305.16</td>
+      </tr>
+      <tr>
+        <td class="pval">PX4</td><td class="pval">304.64</td><td class="pval">5.42</td><td class="pval">296.50</td><td class="pval">313.70</td>
+      </tr>
+      <tr>
+        <td class="diff fine">차이</td><td class="diff fine">0.34</td><td class="diff big">4.33</td><td class="diff big">5.27</td><td class="diff big">8.54</td>
+      </tr>
+      <tr><td colspan="6" style="padding:4px"></td></tr>
+      <tr>
+        <td rowspan="3" style="color:#94a3b8;vertical-align:middle">수직속도<br><span style="color:#475569;font-size:10px">(m/s)</span></td>
+        <td class="xval">XPlane</td><td class="xval">0.02</td><td class="xval">0.36</td><td class="xval">-0.72</td><td class="xval">0.75</td>
+      </tr>
+      <tr>
+        <td class="pval">PX4</td><td class="pval">0.02</td><td class="pval">1.66</td><td class="pval">-2.78</td><td class="pval">2.72</td>
+      </tr>
+      <tr>
+        <td class="diff fine">차이</td><td class="diff fine">0.00</td><td class="diff big">1.30</td><td class="diff big">2.07</td><td class="diff big">1.98</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>XPlane ±3σ 기준 → PX4 오분류율</h3>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:16px;font-family:'IBM Plex Mono',monospace">
+      XPlane 정상 범위로 IDS를 학습시켰을 때<br>PX4 정상 데이터가 이상으로 오분류되는 비율
+    </p>
+
+    <div class="fa-row">
+      <div class="fa-label">수평 속도</div>
+      <div class="fa-bar-bg">
+        <div class="fa-bar" id="bar1" style="width:0%;background:#ef4444"></div>
+      </div>
+      <div class="fa-pct" style="color:#ef4444">11.4%</div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin:-4px 0 12px 100px">
+      정상범위: [60.8, 73.7] m/s
+    </div>
+
+    <div class="fa-row">
+      <div class="fa-label">고도</div>
+      <div class="fa-bar-bg">
+        <div class="fa-bar" id="bar2" style="width:0%;background:#ef4444"></div>
+      </div>
+      <div class="fa-pct" style="color:#ef4444">52.3%</div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin:-4px 0 12px 100px">
+      정상범위: [301.0, 307.6] m · XPlane std가 너무 작음
+    </div>
+
+    <div class="fa-row">
+      <div class="fa-label">수직 속도</div>
+      <div class="fa-bar-bg">
+        <div class="fa-bar" id="bar3" style="width:0%;background:#f97316"></div>
+      </div>
+      <div class="fa-pct" style="color:#f97316">36.6%</div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin:-4px 0 12px 100px">
+      정상범위: [-1.05, 1.08] m/s · PX4 변동폭이 4.6배 큼
+    </div>
+
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-bottom:8px">오분류율 기준</div>
+      <div style="display:flex;gap:12px;font-size:11px;font-family:'IBM Plex Mono',monospace">
+        <span style="color:var(--good)">■ &lt;5%  통합 가능</span>
+        <span style="color:var(--warn)">■ 5~20%  주의</span>
+        <span style="color:var(--bad)">■ &gt;20%  분리 권장</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 결론 -->
+<div class="conclusion">
+  <h3>분석 요약 및 IDS 구축 권고</h3>
+  <p>
+    세 피처 모두 <strong>평균값은 거의 동일</strong>하지만, 문제는 <span class="highlight-bad">분포의 폭(분산)</span>이 다릅니다.<br><br>
+    <strong>수평 속도</strong>는 XPlane(67.2 m/s)과 PX4(70.5 m/s) 간 <span class="highlight-bad">평균 자체가 3.3 m/s 체계적으로 차이</span>납니다.
+    PX4가 같은 경로를 일관되게 더 빠르게 비행합니다. XPlane 데이터로만 학습하면 PX4 정상 비행의 11.4%를 이상으로 탐지합니다.<br><br>
+    <strong>고도와 수직 속도</strong>는 평균은 같으나 PX4의 변동폭이 훨씬 큽니다
+    (고도 std: XPlane 1.6m vs PX4 9.0m, 수직속도 std: 0.36 vs 1.66 m/s).
+    이는 PX4 비행 제어기가 X-Plane 내부 비행 모델보다 <span class="highlight-warn">고도를 더 거칠게 제어</span>하기 때문으로 보입니다.
+    XPlane 기준으로 정상 범위를 잡으면 <span class="highlight-bad">PX4 고도 데이터의 52%, 수직속도의 37%를 오경보</span>로 처리합니다.<br><br>
+    <span class="highlight-bad">→ XPlane 정상 데이터만으로 통일하는 것은 권장하지 않습니다.</span>
+    최소한 <span class="highlight-warn">수평 속도는 offset 보정(+3.3 m/s)을 적용</span>하거나,
+    IDS 정상 범위를 <strong>두 데이터셋의 합집합(union)으로 설정</strong>하는 방식이 현실적입니다.
+    또는 피처를 절대값이 아닌 <span class="highlight-good">편차(deviation from reference trajectory)로 정규화</span>하면
+    두 시뮬레이터 간 차이를 흡수할 수 있습니다.
+  </p>
+</div>
+
+<script>
+// ── 데이터 ───────────────────────────────────────────────────
+const SPEED_X = {mean:67.21,std:2.15,min:60.97,max:73.94};
+const SPEED_P = {mean:70.50,std:2.80,min:60.78,max:79.74};
+const ELEV_X  = {mean:304.30,std:1.09,min:301.19,max:305.40};
+const ELEV_P  = {mean:304.64,std:5.42,min:289.56,max:321.88};
+const CLIMB_X = {mean:0.02,std:0.36,min:-0.84,max:1.00};
+const CLIMB_P = {mean:0.02,std:1.66,min:-4.96,max:6.43};
+
+// Gaussian PDF
+function gauss(x, mean, std) {
+  return Math.exp(-0.5*((x-mean)/std)**2) / (std * Math.sqrt(2*Math.PI));
+}
+
+function makeHistData(xStat, pStat, lo, hi, n=120) {
+  const bins = [], xVals = [], pVals = [];
+  const step = (hi-lo)/n;
+  for (let i=0; i<=n; i++) {
+    const v = lo + i*step;
+    bins.push(v);
+    xVals.push(gauss(v, xStat.mean, xStat.std));
+    pVals.push(gauss(v, pStat.mean, pStat.std));
+  }
+  return {bins, xVals, pVals};
+}
+
+const CFG = {
+  type: 'line',
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 800 },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(4)}`
+        }
+      }
+    },
+    scales: {
+      x: { grid:{ color:'rgba(30,36,51,0.8)' }, ticks:{ color:'#475569', font:{family:'IBM Plex Mono',size:10}, maxTicksLimit:6 } },
+      y: { grid:{ color:'rgba(30,36,51,0.8)' }, ticks:{ color:'#475569', font:{family:'IBM Plex Mono',size:10} },
+           title:{ display:true, text:'Density', color:'#475569', font:{family:'IBM Plex Mono',size:10}} }
+    },
+    elements: { point:{radius:0} }
+  }
+};
+
+function buildChart(id, xStat, pStat, lo, hi) {
+  const {bins, xVals, pVals} = makeHistData(xStat, pStat, lo, hi);
+  const ctx = document.getElementById(id).getContext('2d');
+  new Chart(ctx, {
+    ...CFG,
+    data: {
+      labels: bins.map(v=>v.toFixed(1)),
+      datasets: [
+        {
+          label:'XPlane', data: xVals,
+          borderColor:'#38bdf8', borderWidth:2,
+          backgroundColor:'rgba(56,189,248,0.08)',
+          fill: true, tension: 0.4
+        },
+        {
+          label:'PX4', data: pVals,
+          borderColor:'#f97316', borderWidth:2,
+          backgroundColor:'rgba(249,115,22,0.08)',
+          fill: true, tension: 0.4
+        }
+      ]
+    }
+  });
+}
+
+buildChart('histSpeed', SPEED_X, SPEED_P, 55, 82);
+buildChart('histElev',  ELEV_X,  ELEV_P,  285, 325);
+buildChart('histClimb', CLIMB_X, CLIMB_P, -6,  7);
+
+// Animate bars
+setTimeout(() => {
+  document.getElementById('bar1').style.width = '11.4%';
+  document.getElementById('bar2').style.width = '52.3%';
+  document.getElementById('bar3').style.width = '36.6%';
+}, 300);
+</script>
+</body>
+</html>
